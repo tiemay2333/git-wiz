@@ -1,7 +1,7 @@
 {
-    "name": "git-wiz",
+    "name": "git-wiz-v2",
     "publisher": "tiemay",
-    "displayName": "Git Wiz",
+    "displayName": "GitWiz",
     "description": "A minimalist Git extension with a canvas-rendered commit graph and branch management — no bloat, no distractions.",
     "version": "1.0.0",
     "engines": {
