@@ -538,27 +538,35 @@ fs.writeFileSync(process.argv[2], ${JSON.stringify(newMessage + '\n')});
                 return;
             }
             // First get name-status
-            cp.execFile('git', ['diff-tree', '--no-commit-id', '--name-status', '-r', hash], { cwd }, (error, stdout) => {
+            cp.execFile('git', ['diff-tree', '--no-commit-id', '--name-status', '-r', hash, '--root'], { cwd }, (error, stdout) => {
                 if (error) {
                     resolve([]);
                     return;
                 }
+                
+                let output = stdout.trim();
                 const statusMap = new Map<string, string>();
-                stdout.trim().split('\n').filter(Boolean).forEach(line => {
-                    const [status, ...paths] = line.split('\t');
-                    statusMap.set(paths[paths.length - 1], status.charAt(0));
-                });
+                
+                if (output) {
+                    output.split('\n').filter(Boolean).forEach(line => {
+                        const [status, ...paths] = line.split('\t');
+                        statusMap.set(paths[paths.length - 1], status.charAt(0));
+                    });
+                }
 
-                // Then get numstat for insertions/deletions
-                cp.execFile('git', ['diff-tree', '--no-commit-id', '--numstat', '-r', hash], { cwd }, (err, numOut) => {
+                // If no output from diff-tree, it might be the initial commit or something else.
+                // But with --root it should show initial commit.
+                // If still empty, we can try numstat.
+                cp.execFile('git', ['diff-tree', '--no-commit-id', '--numstat', '-r', hash, '--root'], { cwd }, (err, numOut) => {
                     if (err) {
-                        // fallback to just status
                         resolve(Array.from(statusMap.entries()).map(([path, status]) => ({ status, path })));
                         return;
                     }
                     
                     const numMap = new Map<string, { insertions: number, deletions: number }>();
-                    numOut.trim().split('\n').filter(Boolean).forEach(line => {
+                    const numLines = numOut.trim().split('\n').filter(Boolean);
+                    
+                    numLines.forEach(line => {
                         const parts = line.split('\t');
                         if (parts.length >= 3) {
                             const ins = parseInt(parts[0], 10) || 0;
@@ -566,6 +574,11 @@ fs.writeFileSync(process.argv[2], ${JSON.stringify(newMessage + '\n')});
                             numMap.set(parts[parts.length - 1], { insertions: ins, deletions: del });
                         }
                     });
+
+                    // If statusMap is empty but numMap isn't, use numMap to populate paths (status will be 'A' for root commit)
+                    if (statusMap.size === 0 && numMap.size > 0) {
+                        numMap.forEach((_, path) => statusMap.set(path, 'A'));
+                    }
 
                     const files = Array.from(statusMap.entries()).map(([path, status]) => {
                         const stats = numMap.get(path);
